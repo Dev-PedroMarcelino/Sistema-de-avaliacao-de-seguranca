@@ -1,0 +1,2 @@
+# Segmentos de vídeo HLS usam a extensão .ts, mas são binários (não TypeScript).
+public/demo/video/**/*.ts binary

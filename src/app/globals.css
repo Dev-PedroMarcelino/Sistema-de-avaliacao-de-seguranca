@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+:root {
+  --marca: #f59e0b;
+  --tinta: #0b0f19;
+}
+
+@theme inline {
+  --color-marca: var(--marca);
+  --color-tinta: var(--tinta);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  background: #f5f5f4;
+  color: var(--tinta);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Faixa zebrada de sinalização de segurança. */
+.faixa-seguranca {
+  background: repeating-linear-gradient(-45deg, var(--marca) 0 14px, var(--tinta) 14px 28px);
+}
+
+@keyframes tremer {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(9px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(4px); }
+}
+.tremer {
+  animation: tremer 0.45s ease-in-out;
+}
+
+/* Só movimento: o conteúdo nunca fica invisível, mesmo se a animação não rodar. */
+@keyframes surgir {
+  from { transform: translateY(10px); }
+  to { transform: translateY(0); }
+}
+/* Sem "fill-mode": um transform que sobra no ancestral prenderia a tela cheia (position: fixed) do player. */
+.surgir {
+  animation: surgir 0.25s ease-out;
+}
+
+video::cue {
+  font-size: 1.1rem;
+  background: rgba(0, 0, 0, 0.75);
+}
+
+@media print {
+  .nao-imprimir {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}
