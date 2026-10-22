@@ -100,19 +100,37 @@ tests/                    regras + fluxo completo com adulteração simulada
 
 ## Colocando em produção (Vercel + Supabase da VPS)
 
-1. **Banco**: com a connection string do Postgres do Supabase (de preferência o pooler, porta 6543):
+São dois ambientes independentes, cada um com seu banco e seu projeto na Vercel:
+
+| Ambiente | Banco | `DEMO_MODE` | Endereço (exemplo) |
+|---|---|---|---|
+| Cliente | database só do cliente | `false` | `https://integra.suaempresa.com.br` |
+| Portfólio | database só do demo | `true` | `https://demo.integra.suaempresa.com.br` |
+
+1. **Banco na VPS**: um Supabase só para o Integra, com o Postgres acessível pela internet com SSL (a Vercel conecta de fora). Crie dois databases, um para o cliente e um para o demo.
+2. **Arquivos de conexão** (ficam só na sua máquina; `.env*.local` está no `.gitignore`):
    ```bash
-   DATABASE_URL=postgres://... npm run db:migrate
-   DATABASE_URL=postgres://... npm run db:seed -- empresa "Nome da Empresa" "Portaria Principal" "Nome do Admin" admin@empresa.com.br
+   # .env.producao.local
+   DATABASE_URL=postgres://USUARIO:SENHA@HOST:5432/integra?sslmode=require
+   ADMIN_SENHA=senha-inicial-do-admin
+   # .env.demo.local
+   DATABASE_URL=postgres://USUARIO:SENHA@HOST:5432/integra_demo?sslmode=require
    ```
-2. **Vídeo**: converta para HLS e suba a pasta gerada num bucket público do Storage:
+   Use a porta direta do Postgres (5432). O pooler do Supabase (6543) também serve, desde que esteja configurado para esse database.
+3. **Migrar e preparar** (os scripts mostram só o host, nunca a senha):
+   ```bash
+   ENV_FILE=.env.producao.local npm run db:migrate
+   ENV_FILE=.env.producao.local npm run db:seed -- empresa "Nome da Empresa" "Portaria Principal" "Nome do Admin" admin@empresa.com.br
+   ENV_FILE=.env.demo.local npm run db:migrate
+   ENV_FILE=.env.demo.local npm run db:seed -- demo
+   ```
+4. **Vercel**: importe o repositório duas vezes (um projeto por ambiente). Em cada um defina `DATABASE_URL`, `AUTH_SECRET` (um diferente por projeto; gere com `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), `APP_URL` com o domínio do ambiente e `DEMO_MODE`. As funções rodam em São Paulo (`gru1`, em `vercel.json`) para ficar perto da VPS.
+5. **Domínio**: em *Settings → Domains* de cada projeto, adicione o subdomínio e crie no DNS o `CNAME` que a Vercel indicar.
+6. **Vídeo**: converta para HLS e suba a pasta gerada num bucket público do Storage do Supabase:
    ```bash
    npm run video:preparar -- video-integracao.mp4
    ```
-3. **Vercel**: importe o repositório e defina `DATABASE_URL`, `AUTH_SECRET` (32+ caracteres aleatórios), `APP_URL` (ex.: `https://integra.suaempresa.com.br`) e `DEMO_MODE=false`.
-4. No painel: **Vídeo e perguntas**, cole o link do `master.m3u8`, detecte a duração, cadastre as perguntas e publique. Imprima o cartaz da portaria em **Portaria**.
-
-Para um deploy de portfólio separado, use outro banco com `npm run db:seed -- demo` e `DEMO_MODE=true`.
+7. **No painel do cliente**: troque a senha em **Minha senha**, cole o link do `master.m3u8` em **Vídeo e perguntas**, detecte a duração, cadastre as perguntas e publique. Imprima o cartaz em **Portaria**.
 
 ## Testes
 

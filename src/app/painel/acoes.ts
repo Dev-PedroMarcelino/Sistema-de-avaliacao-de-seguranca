@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb, um } from "@/lib/db";
 import { apagarSessao, exigirUsuario } from "@/lib/auth/servidor";
-import { gerarHashSenha } from "@/lib/auth/senha";
+import { conferirSenha, gerarHashSenha } from "@/lib/auth/senha";
 import { ErroFluxo, conferirNaPortaria, criarIntegracao } from "@/lib/integracao/servico";
 import { type ConteudoVersao, obterRascunho, publicarVersao, salvarRascunho, validarConteudo } from "@/lib/integracao/conteudo";
 import { obterEmpresa } from "@/lib/painel/consultas";
@@ -237,6 +237,28 @@ export async function criarUsuario(_: unknown, form: FormData): Promise<Resultad
       perfil,
     ]);
     revalidatePath("/painel/configuracoes");
+    return { ok: true };
+  } catch (e) {
+    return falha(e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Minha conta (qualquer perfil)
+// ---------------------------------------------------------------------------
+
+export async function alterarSenha(_: unknown, form: FormData): Promise<Resultado | null> {
+  const u = await exigirUsuario("conta");
+  try {
+    const atual = String(form.get("atual") ?? "");
+    const nova = String(form.get("nova") ?? "");
+    if (nova.length < 10) throw new ErroFluxo(400, "A nova senha precisa ter pelo menos 10 caracteres.");
+    if (nova !== String(form.get("confirmacao") ?? "")) throw new ErroFluxo(400, "A confirmação não bate com a nova senha.");
+    if (nova === atual) throw new ErroFluxo(400, "A nova senha precisa ser diferente da atual.");
+    const db = await getDb();
+    const registro = await um<{ senha_hash: string }>(db, "select senha_hash from app.usuarios where id = $1", [u.id]);
+    if (!registro || !(await conferirSenha(atual, registro.senha_hash))) throw new ErroFluxo(400, "Senha atual incorreta.");
+    await db.query("update app.usuarios set senha_hash = $2 where id = $1", [u.id, await gerarHashSenha(nova)]);
     return { ok: true };
   } catch (e) {
     return falha(e);

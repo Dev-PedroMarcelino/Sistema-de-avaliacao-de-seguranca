@@ -1,4 +1,5 @@
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { KeyRound, LogOut } from "lucide-react";
 import { Logo } from "@/components/ui";
 import { exigirUsuario } from "@/lib/auth/servidor";
 import { podeAcessar } from "@/lib/auth/sessao";
@@ -38,20 +39,28 @@ export default async function LayoutPainel({ children }: { children: React.React
         <div className="hidden border-t border-white/10 px-5 py-4 lg:block">
           <p className="truncate text-sm font-semibold">{usuario.nome}</p>
           <p className="text-xs text-stone-400">{PERFIS[usuario.perfil]}</p>
-          <form action={sair} className="mt-3">
-            <button className="flex items-center gap-2 text-sm text-stone-400 hover:text-white">
-              <LogOut className="h-4 w-4" /> Sair
-            </button>
-          </form>
+          <div className="mt-3 flex items-center gap-4">
+            <Link href="/painel/conta" className="flex items-center gap-2 text-sm text-stone-400 hover:text-white">
+              <KeyRound className="h-4 w-4" /> Minha senha
+            </Link>
+            <form action={sair}>
+              <button className="flex items-center gap-2 text-sm text-stone-400 hover:text-white">
+                <LogOut className="h-4 w-4" /> Sair
+              </button>
+            </form>
+          </div>
         </div>
       </aside>
       <div className="min-w-0">
         <main className="mx-auto max-w-6xl px-4 py-6 lg:px-8 lg:py-8">{children}</main>
-        <form action={sair} className="nao-imprimir px-4 pb-8 text-center lg:hidden">
-          <button className="text-sm text-stone-500 underline">
-            Sair ({usuario.nome})
-          </button>
-        </form>
+        <div className="nao-imprimir flex justify-center gap-6 px-4 pb-8 text-sm text-stone-500 lg:hidden">
+          <Link href="/painel/conta" className="underline">
+            Minha senha
+          </Link>
+          <form action={sair}>
+            <button className="underline">Sair ({usuario.nome})</button>
+          </form>
+        </div>
       </div>
     </div>
   );

@@ -57,6 +57,7 @@ export const AREAS = {
   conteudo: ["admin", "seguranca"],
   relatorios: ["admin", "seguranca"],
   configuracoes: ["admin"],
+  conta: ["admin", "seguranca", "portaria"],
 } satisfies Record<string, Perfil[]>;
 
 export type Area = keyof typeof AREAS;
