@@ -245,9 +245,9 @@ export function renderizarTermo(
   return modelo
     .replaceAll("{nome}", v.nome)
     .replaceAll("{cpf}", fmt.cpf(v.cpf))
-    .replaceAll("{placa}", fmt.placa(v.placa))
+    .replaceAll("{placa}", v.placa ? fmt.placa(v.placa) : "não informada")
     .replaceAll("{empresa}", v.empresa)
-    .replaceAll("{transportadora}", v.transportadora ?? "—");
+    .replaceAll("{transportadora}", v.transportadora ?? "não informada");
 }
 
 async function montarEstado(db: Db, i: Integracao, agora: Date) {
@@ -411,8 +411,12 @@ export async function iniciar(ctx: Contexto, token: string, dados: { veiculoPara
 export const esquemaIdentificacao = z.object({
   nome: z.string().refine(nomeValido, "Informe nome e sobrenome."),
   cpf: z.string().refine(cpfValido, "CPF inválido. Confira os números."),
-  placa: z.string().refine((p) => normalizarPlaca(p) !== null, "Placa inválida. Ex.: ABC1D23 ou ABC-1234."),
-  transportadora: z.string().trim().min(2, "Informe a transportadora.").max(120),
+  // Placa e transportadora são opcionais; se a placa vier, precisa ser válida.
+  placa: z
+    .string()
+    .optional()
+    .refine((p) => !p?.trim() || normalizarPlaca(p) !== null, "Placa inválida. Ex.: ABC1D23 ou ABC-1234."),
+  transportadora: z.string().trim().max(120).optional(),
   aceitePrivacidade: z.literal(true, { error: "É preciso aceitar o aviso de privacidade." }),
 });
 
@@ -422,8 +426,8 @@ export async function identificar(ctx: Contexto, token: string, entrada: unknown
   if (!r.success) throw new ErroFluxo(400, r.error.issues[0]?.message ?? "Dados inválidos.");
   const nome = normalizarNome(r.data.nome);
   const cpf = soDigitos(r.data.cpf);
-  const placa = normalizarPlaca(r.data.placa)!;
-  const transportadoraNome = r.data.transportadora.trim().replace(/\s+/g, " ");
+  const placa = r.data.placa?.trim() ? normalizarPlaca(r.data.placa) : null;
+  const transportadoraNome = (r.data.transportadora ?? "").trim().replace(/\s+/g, " ") || null;
 
   return ctx.db.tx(async (db) => {
     const i = await travar(db, token);
@@ -431,29 +435,33 @@ export async function identificar(ctx: Contexto, token: string, entrada: unknown
     exigirEtapa(i, "identificacao");
     const v = await carregarVersao(db, i);
 
-    const transportadora = (await um<{ id: string; nome: string }>(
-      db,
-      `insert into app.transportadoras (empresa_id, nome) values ($1, $2)
-       on conflict (empresa_id, lower(nome)) do update set nome = app.transportadoras.nome
-       returning id, nome`,
-      [i.empresa_id, transportadoraNome],
-    ))!;
+    const transportadora = transportadoraNome
+      ? (await um<{ id: string; nome: string }>(
+          db,
+          `insert into app.transportadoras (empresa_id, nome) values ($1, $2)
+           on conflict (empresa_id, lower(nome)) do update set nome = app.transportadoras.nome
+           returning id, nome`,
+          [i.empresa_id, transportadoraNome],
+        ))!
+      : null;
+    // Sem transportadora informada, o motorista mantém a que já tinha.
     const motorista = (await um<{ id: string }>(
       db,
       `insert into app.motoristas (empresa_id, nome, cpf, telefone, transportadora_id, criado_em, atualizado_em)
        values ($1, $2, $3, $4, $5, $6::timestamptz, $6::timestamptz)
        on conflict (empresa_id, cpf) do update
          set nome = excluded.nome, telefone = excluded.telefone,
-             transportadora_id = excluded.transportadora_id, atualizado_em = excluded.atualizado_em
+             transportadora_id = coalesce(excluded.transportadora_id, app.motoristas.transportadora_id),
+             atualizado_em = excluded.atualizado_em
        returning id`,
-      [i.empresa_id, nome, cpf, i.telefone, transportadora.id, agora.toISOString()],
+      [i.empresa_id, nome, cpf, i.telefone, transportadora?.id ?? null, agora.toISOString()],
     ))!;
 
     const dadosEvento = {
       nome,
       cpf,
       placa,
-      transportadora: transportadora.nome,
+      transportadora: transportadora?.nome ?? null,
       telefone: i.telefone,
       aceite_privacidade: true,
     };
@@ -470,7 +478,7 @@ export async function identificar(ctx: Contexto, token: string, entrada: unknown
       await db.query(
         `update app.integracoes set etapa = 'ja_valida', motorista_id = $2, placa = $3, transportadora_id = $4,
            identificado_em = $5::timestamptz, comprovante_vigente_id = $6 where id = $1`,
-        [i.id, motorista.id, placa, transportadora.id, agora.toISOString(), vigente.id],
+        [i.id, motorista.id, placa, transportadora?.id ?? null, agora.toISOString(), vigente.id],
       );
       await registrarEvento(db, i.id, "identificacao", dadosEvento, { ...ctx, agora });
       await registrarEvento(
@@ -487,7 +495,7 @@ export async function identificar(ctx: Contexto, token: string, entrada: unknown
     await db.query(
       `update app.integracoes set etapa = 'video', motorista_id = $2, placa = $3, transportadora_id = $4,
          identificado_em = $5::timestamptz, perguntas_ids = $6::text::jsonb where id = $1`,
-      [i.id, motorista.id, placa, transportadora.id, agora.toISOString(), JSON.stringify(perguntas)],
+      [i.id, motorista.id, placa, transportadora?.id ?? null, agora.toISOString(), JSON.stringify(perguntas)],
     );
     await registrarEvento(db, i.id, "identificacao", dadosEvento, { ...ctx, agora });
     return montarEstado(db, { ...i, etapa: "video", perguntas_ids: perguntas }, agora);

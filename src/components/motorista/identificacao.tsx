@@ -38,8 +38,9 @@ export function Identificacao({
   const erros = {
     nome: nomeValido(nome) ? "" : "Informe nome e sobrenome.",
     cpf: cpfValido(cpf) ? "" : "CPF inválido.",
-    placa: normalizarPlaca(placa) ? "" : "Placa inválida (ex.: ABC1D23).",
-    transportadora: transportadora.trim().length >= 2 ? "" : "Informe a transportadora.",
+    // Opcionais: só valida a placa se ela for preenchida.
+    placa: !placa.trim() || normalizarPlaca(placa) ? "" : "Placa inválida (ex.: ABC1D23).",
+    transportadora: "",
   };
   const valido = Object.values(erros).every((e) => !e) && aceite;
   const mostrar = (campo: keyof typeof erros) => (tocado[campo] ? erros[campo] : "");
@@ -87,7 +88,7 @@ export function Identificacao({
           <Erro texto={mostrar("cpf")} />
         </div>
         <div>
-          <Rotulo htmlFor="placa">Placa do veículo</Rotulo>
+          <Rotulo htmlFor="placa">Placa (opcional)</Rotulo>
           <Campo
             id="placa"
             autoCapitalize="characters"
@@ -101,7 +102,7 @@ export function Identificacao({
         </div>
       </div>
       <div>
-        <Rotulo htmlFor="transportadora">Transportadora</Rotulo>
+        <Rotulo htmlFor="transportadora">Transportadora (opcional)</Rotulo>
         <Campo
           id="transportadora"
           list="lista-transportadoras"

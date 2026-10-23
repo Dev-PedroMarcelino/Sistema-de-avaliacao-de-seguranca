@@ -121,6 +121,25 @@ describe("fluxo completo do motorista", () => {
   });
 });
 
+describe("placa e transportadora opcionais", () => {
+  it("identifica só com nome e CPF, e o termo diz 'não informada'", async () => {
+    const { token } = await novaIntegracao();
+    await obterEstado(em(1), token);
+    await iniciar(em(2), token, { veiculoParado: true });
+    const e = await identificar(em(3), token, { nome: "Sem Placa Souza", cpf: "11144477735", aceitePrivacidade: true });
+    expect(e.etapa).toBe("video");
+    const i = (await um<{ placa: string | null; transportadora_id: string | null }>(
+      db,
+      "select placa, transportadora_id from app.integracoes where token = $1",
+      [token],
+    ))!;
+    expect(i).toEqual({ placa: null, transportadora_id: null });
+    await expect(
+      identificar(em(4), (await novaIntegracao()).token, { nome: "X Y", cpf: "11144477735", placa: "123", aceitePrivacidade: true }),
+    ).rejects.toThrow();
+  });
+});
+
 describe("registros de prova", () => {
   it("o banco recusa alterar ou apagar eventos", async () => {
     await expect(db.query("update app.eventos set tipo = 'x'")).rejects.toThrow(/não pode ser alterado/);
