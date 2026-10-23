@@ -15,6 +15,9 @@ import {
 } from "lucide-react";
 import { BotaoLink, Logo } from "@/components/ui";
 
+// DEMO_MODE é lido em tempo de execução (o mesmo build serve o cliente e o demo).
+export const dynamic = "force-dynamic";
+
 const PASSOS = [
   { icone: Link2, titulo: "Link pelo WhatsApp", texto: "A segurança gera um link único para o motorista. Quem chega sem ele lê o QR Code da portaria." },
   { icone: Smartphone, titulo: "Vídeo que não pula", texto: "Sem pausar, adiantar ou acelerar. Saiu da tela, o vídeo para. O servidor confere o tempo real assistido." },
@@ -171,7 +174,7 @@ export default function Inicio() {
         <div className="mt-8 grid gap-4 text-sm sm:grid-cols-3">
           <div className="rounded-2xl p-5 ring-1 ring-stone-200">
             <h3 className="font-bold">Aplicação</h3>
-            <p className="mt-1 text-stone-600">Next.js 15 (App Router), React 19, TypeScript e Tailwind. Deploy na Vercel.</p>
+            <p className="mt-1 text-stone-600">Next.js 15 (App Router), React 19, TypeScript e Tailwind, em container Docker.</p>
           </div>
           <div className="rounded-2xl p-5 ring-1 ring-stone-200">
             <h3 className="font-bold">Dados</h3>

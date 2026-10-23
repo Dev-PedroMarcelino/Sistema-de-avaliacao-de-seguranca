@@ -82,14 +82,19 @@ const global = globalThis as unknown as { __integraDb?: Promise<Db> };
 
 /**
  * Conexão única do processo.
- * Com DATABASE_URL: Postgres do Supabase (migrações via `npm run db:migrate`).
+ * Com DATABASE_URL: Postgres de produção (migrações via `npm run db:migrate` ou MIGRAR_AO_INICIAR=true).
  * Sem: PGlite em .data/pglite, com migrações e dados de demonstração automáticos.
  */
 export function getDb(): Promise<Db> {
   if (!global.__integraDb) {
     global.__integraDb = (async () => {
       const url = process.env.DATABASE_URL;
-      if (url) return conectarPostgres(url);
+      if (url) {
+        const db = await conectarPostgres(url);
+        const { prepararBanco } = await import("./preparar");
+        await prepararBanco(db);
+        return db;
+      }
       const db = await criarPglite(process.env.PGLITE_DIR || path.join(process.cwd(), ".data", "pglite"));
       await aplicarMigracoes(db);
       const { semearSeVazio } = await import("../demo/semear");

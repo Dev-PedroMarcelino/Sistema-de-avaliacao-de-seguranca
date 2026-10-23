@@ -60,7 +60,7 @@ export async function obterRascunho(db: Db, treinamentoId: string) {
   const nova = await um<{ id: string }>(
     db,
     `insert into app.versoes (treinamento_id, numero, video_url, legenda_url, duracao_seg, termo, perguntas, perguntas_por_integracao)
-     values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8) returning id`,
+     values ($1, $2, $3, $4, $5, $6, $7::text::jsonb, $8) returning id`,
     [
       treinamentoId,
       (ultima?.numero ?? 0) + 1,
@@ -77,7 +77,7 @@ export async function obterRascunho(db: Db, treinamentoId: string) {
 
 export async function salvarRascunho(db: Db, versaoId: string, c: ConteudoVersao) {
   await db.query(
-    `update app.versoes set video_url = $2, legenda_url = $3, duracao_seg = $4, termo = $5, perguntas = $6::jsonb,
+    `update app.versoes set video_url = $2, legenda_url = $3, duracao_seg = $4, termo = $5, perguntas = $6::text::jsonb,
        perguntas_por_integracao = $7 where id = $1 and publicada_em is null`,
     [
       versaoId,

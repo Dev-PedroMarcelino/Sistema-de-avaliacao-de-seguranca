@@ -99,7 +99,7 @@ export async function registrarEvento(
   const hash = hashEvento(evento);
   await db.query(
     `insert into app.eventos (integracao_id, seq, tipo, dados, ocorrido_em, ip, user_agent, hash_anterior, hash)
-     values ($1, $2, $3, $4::jsonb, $5::timestamptz, $6, $7, $8, $9)`,
+     values ($1, $2, $3, $4::text::jsonb, $5::timestamptz, $6, $7, $8, $9)`,
     [integracaoId, evento.seq, tipo, json, ctx.agora.toISOString(), evento.ip, evento.user_agent, evento.hash_anterior, hash],
   );
   return { seq: evento.seq, hash };
@@ -486,7 +486,7 @@ export async function identificar(ctx: Contexto, token: string, entrada: unknown
     const perguntas = sortearPerguntas(v.perguntas, v.perguntas_por_integracao, i.id);
     await db.query(
       `update app.integracoes set etapa = 'video', motorista_id = $2, placa = $3, transportadora_id = $4,
-         identificado_em = $5::timestamptz, perguntas_ids = $6::jsonb where id = $1`,
+         identificado_em = $5::timestamptz, perguntas_ids = $6::text::jsonb where id = $1`,
       [i.id, motorista.id, placa, transportadora.id, agora.toISOString(), JSON.stringify(perguntas)],
     );
     await registrarEvento(db, i.id, "identificacao", dadosEvento, { ...ctx, agora });
@@ -725,7 +725,7 @@ export async function assinar(ctx: Contexto, token: string, entrada: unknown) {
     await db.query(
       `insert into app.comprovantes
          (integracao_id, empresa_id, motorista_id, versao_id, codigo, emitido_em, valido_ate, dados, evento_seq, hash_corrente, hash)
-       values ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8::jsonb, $9, $10, $11)`,
+       values ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8::text::jsonb, $9, $10, $11)`,
       [
         i.id,
         i.empresa_id,
