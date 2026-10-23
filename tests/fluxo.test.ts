@@ -140,6 +140,32 @@ describe("placa e transportadora opcionais", () => {
   });
 });
 
+describe("várias placas e transportadoras por motorista", () => {
+  it("acumula no cadastro e a portaria acha o motorista por qualquer placa", async () => {
+    const { buscarNaPortaria } = await import("@/lib/painel/consultas");
+    const cpf = "39053344705";
+    for (const [placa, transportadora] of [
+      ["AAA1A11", "Transp Um"],
+      ["BBB2B22", "Transp Dois"],
+    ]) {
+      const { token } = await novaIntegracao();
+      await obterEstado(em(1), token);
+      await iniciar(em(2), token, { veiculoParado: true });
+      await identificar(em(3), token, { nome: "Varias Placas Lima", cpf, placa, transportadora, aceitePrivacidade: true });
+    }
+    const m = (await um<{ id: string; empresa_id: string }>(db, "select id, empresa_id from app.motoristas where cpf = $1", [cpf]))!;
+    const placas = await db.query<{ placa: string }>("select placa from app.motorista_placas where motorista_id = $1 order by placa", [m.id]);
+    expect(placas.map((p) => p.placa)).toEqual(["AAA1A11", "BBB2B22"]);
+    const transp = await db.query("select 1 from app.motorista_transportadoras where motorista_id = $1", [m.id]);
+    expect(transp).toHaveLength(2);
+    for (const placa of ["AAA1A11", "BBB2B22"]) {
+      const achados = await buscarNaPortaria(db, m.empresa_id, placa);
+      expect(achados.map((a) => a.motorista_id)).toContain(m.id);
+    }
+    expect(await buscarNaPortaria(db, m.empresa_id, "ZZZ9Z99")).toHaveLength(0);
+  });
+});
+
 describe("registros de prova", () => {
   it("o banco recusa alterar ou apagar eventos", async () => {
     await expect(db.query("update app.eventos set tipo = 'x'")).rejects.toThrow(/não pode ser alterado/);

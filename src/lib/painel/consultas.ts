@@ -80,7 +80,7 @@ export async function listarMotoristas(
       where m.empresa_id = $1
         and ($2::text = '' or m.nome ilike '%' || $2 || '%'
              or ($3::text <> '' and (m.cpf like $3 || '%' or m.telefone like '%' || $3 || '%'))
-             or ($4::text <> '' and exists (select 1 from app.integracoes i where i.motorista_id = m.id and i.placa like $4 || '%')))
+             or ($4::text <> '' and exists (select 1 from app.motorista_placas mp where mp.motorista_id = m.id and mp.placa like $4 || '%')))
         and ($5::text = '' or m.transportadora_id::text = $5)
       order by coalesce(c.emitido_em, m.criado_em) desc
       limit 500`,
@@ -221,9 +221,15 @@ export async function buscarNaPortaria(db: Db, empresaId: string, termo: string,
     vigente_ate: Date | null;
     conferido_em: Date | null;
     etapa: string | null;
+    placas: string[];
+    transportadoras: string[];
   }>(
     `select m.id as motorista_id, m.nome, m.cpf, t.nome as transportadora, ult.id as integracao_id, ult.placa,
-            c.codigo, c.vigente_ate, ult.conferido_em, ult.etapa
+            c.codigo, c.vigente_ate, ult.conferido_em, ult.etapa,
+            coalesce((select array_agg(mp.placa order by mp.criado_em desc) from app.motorista_placas mp
+                       where mp.motorista_id = m.id), '{}') as placas,
+            coalesce((select array_agg(tt.nome order by mt.criado_em desc) from app.motorista_transportadoras mt
+                       join app.transportadoras tt on tt.id = mt.transportadora_id where mt.motorista_id = m.id), '{}') as transportadoras
        from app.motoristas m
        left join app.transportadoras t on t.id = m.transportadora_id
        left join lateral (
@@ -236,11 +242,31 @@ export async function buscarNaPortaria(db: Db, empresaId: string, termo: string,
       where m.empresa_id = $1
         and (m.nome ilike '%' || $2 || '%'
              or ($3::text <> '' and m.cpf like $3 || '%')
-             or ($4::text <> '' and exists (select 1 from app.integracoes i where i.motorista_id = m.id and i.placa = $4)))
+             or ($4::text <> '' and exists (select 1 from app.motorista_placas mp where mp.motorista_id = m.id and mp.placa = $4)))
       order by c.vigente_ate desc nulls last limit 20`,
     [empresaId, t, digitos.length >= 3 ? digitos : "", placa.length >= 7 ? placa : ""],
   );
   return linhas.map((l) => ({ ...l, situacao: situacaoDe(l.vigente_ate, agora) }));
+}
+
+/** O termo digitado na portaria é uma placa válida? (para oferecer "vincular esta placa"). */
+export function placaDoTermo(termo: string) {
+  const p = termo.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(p) ? p : null;
+}
+
+export function placasETransportadoras(db: Db, motoristaId: string) {
+  return Promise.all([
+    db.query<{ placa: string; origem: string; criado_em: Date }>(
+      "select placa, origem, criado_em from app.motorista_placas where motorista_id = $1 order by criado_em desc",
+      [motoristaId],
+    ),
+    db.query<{ id: string; nome: string; origem: string; criado_em: Date }>(
+      `select t.id, t.nome, mt.origem, mt.criado_em from app.motorista_transportadoras mt
+         join app.transportadoras t on t.id = mt.transportadora_id where mt.motorista_id = $1 order by mt.criado_em desc`,
+      [motoristaId],
+    ),
+  ]);
 }
 
 // ---------------------------------------------------------------------------

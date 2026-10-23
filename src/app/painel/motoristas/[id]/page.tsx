@@ -6,7 +6,8 @@ import { Tabela } from "@/components/painel";
 import { SeloSituacao } from "@/components/ui";
 import { exigirUsuario } from "@/lib/auth/servidor";
 import { getDb } from "@/lib/db";
-import { NOME_ETAPA, detalheMotorista, situacaoDe, situacaoLink } from "@/lib/painel/consultas";
+import { NOME_ETAPA, detalheMotorista, placasETransportadoras, situacaoDe, situacaoLink } from "@/lib/painel/consultas";
+import { VinculosMotorista } from "../vinculos";
 import * as fmt from "@/lib/formato";
 
 export const metadata: Metadata = { title: "Motorista" };
@@ -14,8 +15,10 @@ export const metadata: Metadata = { title: "Motorista" };
 export default async function Motorista({ params }: { params: Promise<{ id: string }> }) {
   const u = await exigirUsuario("motoristas");
   const { id } = await params;
-  const r = await detalheMotorista(await getDb(), u.empresaId, id);
+  const db = await getDb();
+  const r = await detalheMotorista(db, u.empresaId, id);
   if (!r) notFound();
+  const [placas, transportadoras] = await placasETransportadoras(db, r.motorista.id);
   const { motorista: m, integracoes } = r;
   const ultima = integracoes.find((i) => i.vigente_ate);
   const situacao = situacaoDe(ultima?.vigente_ate);
@@ -42,6 +45,15 @@ export default async function Motorista({ params }: { params: Promise<{ id: stri
           )}
         </div>
       </div>
+
+      <section className="mb-6 rounded-2xl bg-white p-5 ring-1 ring-stone-200">
+        <h2 className="font-bold">Placas e transportadoras</h2>
+        <p className="mb-4 text-sm text-stone-500">
+          A integração vale para o motorista, em qualquer caminhão. As placas e transportadoras entram sozinhas a cada
+          integração; inclua outras aqui para a portaria achá-lo pela placa.
+        </p>
+        <VinculosMotorista motoristaId={m.id} placas={placas.map((p) => p.placa)} transportadoras={transportadoras} />
+      </section>
 
       <h2 className="mb-3 text-lg font-bold">Histórico de integrações</h2>
       <Tabela>

@@ -11,7 +11,7 @@ import { ErroFluxo, conferirNaPortaria, criarIntegracao } from "@/lib/integracao
 import { type ConteudoVersao, obterRascunho, publicarVersao, salvarRascunho, validarConteudo } from "@/lib/integracao/conteudo";
 import { obterEmpresa } from "@/lib/painel/consultas";
 import { ipDe, urlBase, userAgentDe } from "@/lib/requisicao";
-import { normalizarTelefone } from "@/lib/validacao";
+import { normalizarPlaca, normalizarTelefone } from "@/lib/validacao";
 import { linkWhatsApp, preencherMensagem } from "@/lib/whatsapp";
 import {
   type EstadoWhatsApp,
@@ -105,6 +105,85 @@ export async function conferir(integracaoId: string): Promise<Resultado> {
       empresaId: u.empresaId,
     });
     revalidatePath("/painel/portaria");
+    return { ok: true };
+  } catch (e) {
+    return falha(e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Placas e transportadoras do motorista
+// ---------------------------------------------------------------------------
+
+async function motoristaDaEmpresa(empresaId: string, motoristaId: string) {
+  const db = await getDb();
+  const m = await um(db, "select 1 from app.motoristas where id = $1 and empresa_id = $2", [motoristaId, empresaId]);
+  if (!m) throw new ErroFluxo(404, "Motorista não encontrado.");
+  return db;
+}
+
+export async function vincularPlaca(motoristaId: string, placaInformada: string): Promise<Resultado> {
+  const u = await exigirUsuario("motoristas");
+  try {
+    const placa = normalizarPlaca(placaInformada);
+    if (!placa) throw new ErroFluxo(400, "Placa inválida. Ex.: ABC1D23 ou ABC-1234.");
+    const db = await motoristaDaEmpresa(u.empresaId, motoristaId);
+    await db.query(
+      "insert into app.motorista_placas (motorista_id, placa, origem) values ($1, $2, 'painel') on conflict do nothing",
+      [motoristaId, placa],
+    );
+    revalidatePath("/painel/portaria");
+    revalidatePath(`/painel/motoristas/${motoristaId}`);
+    return { ok: true };
+  } catch (e) {
+    return falha(e);
+  }
+}
+
+export async function removerPlaca(motoristaId: string, placa: string): Promise<Resultado> {
+  const u = await exigirUsuario("motoristas");
+  try {
+    const db = await motoristaDaEmpresa(u.empresaId, motoristaId);
+    await db.query("delete from app.motorista_placas where motorista_id = $1 and placa = $2", [motoristaId, placa]);
+    revalidatePath(`/painel/motoristas/${motoristaId}`);
+    return { ok: true };
+  } catch (e) {
+    return falha(e);
+  }
+}
+
+export async function vincularTransportadora(motoristaId: string, nomeInformado: string): Promise<Resultado> {
+  const u = await exigirUsuario("motoristas");
+  try {
+    const nome = nomeInformado.trim().replace(/\s+/g, " ");
+    if (nome.length < 2) throw new ErroFluxo(400, "Informe o nome da transportadora.");
+    const db = await motoristaDaEmpresa(u.empresaId, motoristaId);
+    const t = (await um<{ id: string }>(
+      db,
+      `insert into app.transportadoras (empresa_id, nome) values ($1, $2)
+       on conflict (empresa_id, lower(nome)) do update set nome = app.transportadoras.nome returning id`,
+      [u.empresaId, nome],
+    ))!;
+    await db.query(
+      "insert into app.motorista_transportadoras (motorista_id, transportadora_id, origem) values ($1, $2, 'painel') on conflict do nothing",
+      [motoristaId, t.id],
+    );
+    revalidatePath(`/painel/motoristas/${motoristaId}`);
+    return { ok: true };
+  } catch (e) {
+    return falha(e);
+  }
+}
+
+export async function removerTransportadora(motoristaId: string, transportadoraId: string): Promise<Resultado> {
+  const u = await exigirUsuario("motoristas");
+  try {
+    const db = await motoristaDaEmpresa(u.empresaId, motoristaId);
+    await db.query("delete from app.motorista_transportadoras where motorista_id = $1 and transportadora_id = $2", [
+      motoristaId,
+      transportadoraId,
+    ]);
+    revalidatePath(`/painel/motoristas/${motoristaId}`);
     return { ok: true };
   } catch (e) {
     return falha(e);

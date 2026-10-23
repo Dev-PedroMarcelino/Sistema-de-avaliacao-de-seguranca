@@ -456,6 +456,20 @@ export async function identificar(ctx: Contexto, token: string, entrada: unknown
        returning id`,
       [i.empresa_id, nome, cpf, i.telefone, transportadora?.id ?? null, agora.toISOString()],
     ))!;
+    // O cadastro do motorista acumula as placas e transportadoras com que ele vem.
+    if (placa) {
+      await db.query(
+        "insert into app.motorista_placas (motorista_id, placa, criado_em) values ($1, $2, $3::timestamptz) on conflict do nothing",
+        [motorista.id, placa, agora.toISOString()],
+      );
+    }
+    if (transportadora) {
+      await db.query(
+        `insert into app.motorista_transportadoras (motorista_id, transportadora_id, criado_em) values ($1, $2, $3::timestamptz)
+         on conflict do nothing`,
+        [motorista.id, transportadora.id, agora.toISOString()],
+      );
+    }
 
     const dadosEvento = {
       nome,

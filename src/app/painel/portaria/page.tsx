@@ -8,18 +8,22 @@ import { BotaoImprimir } from "@/components/imprimir";
 import { Campo, classesBotao } from "@/components/ui";
 import { exigirUsuario } from "@/lib/auth/servidor";
 import { getDb } from "@/lib/db";
-import { buscarNaPortaria, listarUnidades } from "@/lib/painel/consultas";
+import { buscarNaPortaria, listarUnidades, placaDoTermo } from "@/lib/painel/consultas";
 import { urlBase } from "@/lib/requisicao";
 import * as fmt from "@/lib/formato";
 import { BotaoConferir } from "./botao-conferir";
+import { VincularPlacaRapido } from "../motoristas/vinculos";
 
 export const metadata: Metadata = { title: "Portaria" };
 
-export default async function Portaria({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function Portaria({ searchParams }: { searchParams: Promise<{ q?: string; placa?: string }> }) {
   const u = await exigirUsuario("portaria");
-  const { q = "" } = await searchParams;
+  const { q = "", placa = "" } = await searchParams;
   const db = await getDb();
   const resultados = q ? await buscarNaPortaria(db, u.empresaId, q) : [];
+  // Placa digitada que não achou ninguém, e a que veio junto na busca pelo motorista (para vincular).
+  const placaBuscada = placaDoTermo(q);
+  const placaParaVincular = placaDoTermo(placa) ?? placaBuscada;
   const base = urlBase(await headers());
   const unidades = await listarUnidades(db, u.empresaId);
   const qrs = await Promise.all(
@@ -51,7 +55,24 @@ export default async function Portaria({ searchParams }: { searchParams: Promise
       </form>
 
       <div className="nao-imprimir mt-5 space-y-3">
-        {q && resultados.length === 0 && (
+        {q && resultados.length === 0 && placaBuscada && (
+          <div className="flex items-start gap-4 rounded-2xl bg-amber-500 p-5 text-tinta">
+            <CircleX className="h-12 w-12 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xl font-extrabold">Caminhão {fmt.placa(placaBuscada)} não está cadastrado</p>
+              <p className="mt-0.5">
+                A integração é do motorista, não do caminhão. Procure pelo <strong>CPF ou nome</strong> de quem está dirigindo:
+                se ele tiver integração válida, pode entrar, e você vincula esta placa ao cadastro dele.
+              </p>
+              <form className="mt-3 flex gap-2" role="search">
+                <input type="hidden" name="placa" value={placaBuscada} />
+                <Campo name="q" placeholder="CPF ou nome do motorista" className="h-12 bg-white" autoFocus />
+                <button className={classesBotao("primario", "md", "h-12 px-5")}>Buscar motorista</button>
+              </form>
+            </div>
+          </div>
+        )}
+        {q && resultados.length === 0 && !placaBuscada && (
           <div className="flex items-center gap-4 rounded-2xl bg-red-700 p-5 text-white">
             <CircleX className="h-12 w-12 shrink-0" />
             <div>
@@ -82,8 +103,15 @@ export default async function Portaria({ searchParams }: { searchParams: Promise
                 </p>
                 <p className="truncate text-xl font-extrabold">{r.nome}</p>
                 <p className="text-sm opacity-90">
-                  {fmt.cpfMascarado(r.cpf)} · placa {fmt.placa(r.placa)} · {r.transportadora ?? "—"}
+                  {fmt.cpfMascarado(r.cpf)}
+                  {r.placas.length > 0 && ` · placas ${r.placas.map((p) => fmt.placa(p)).join(", ")}`}
+                  {r.transportadoras.length > 0 && ` · ${r.transportadoras.join(", ")}`}
                 </p>
+                {placaParaVincular && !r.placas.includes(placaParaVincular) && (
+                  <div className="mt-2 inline-block rounded-xl bg-white p-1 text-tinta">
+                    <VincularPlacaRapido motoristaId={r.motorista_id} placa={placaParaVincular} />
+                  </div>
+                )}
                 {r.vigente_ate && (
                   <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold">
                     <Clock4 className="h-4 w-4" />
