@@ -13,7 +13,16 @@ import { obterEmpresa } from "@/lib/painel/consultas";
 import { ipDe, urlBase, userAgentDe } from "@/lib/requisicao";
 import { normalizarTelefone } from "@/lib/validacao";
 import { linkWhatsApp, preencherMensagem } from "@/lib/whatsapp";
-import { enviarWhatsApp, whatsappConfigurado } from "@/lib/whatsapp-api";
+import {
+  type EstadoWhatsApp,
+  conectarInstancia,
+  criarEnviador,
+  criarInstancia,
+  desconectarInstancia,
+  statusInstancia,
+  uazapiPodeCriarInstancia,
+  whatsappConfigurado,
+} from "@/lib/whatsapp-api";
 import { numerosDeAlerta } from "@/lib/alertas/vencimentos";
 
 type Resultado<T = object> = ({ ok: true } & T) | { ok: false; erro: string };
@@ -186,19 +195,72 @@ export async function salvarAlertas(_: unknown, form: FormData): Promise<Resulta
   }
 }
 
+const falhaWhatsApp = (e: unknown): { ok: false; erro: string } =>
+  e instanceof Error && !(e instanceof ErroFluxo) ? { ok: false, erro: e.message } : falha(e);
+
+async function tokenDaEmpresa(empresaId: string) {
+  return (await um<{ whatsapp_token: string | null }>(await getDb(), "select whatsapp_token from app.empresas where id = $1", [
+    empresaId,
+  ]))?.whatsapp_token ?? null;
+}
+
 export async function testarAlerta(): Promise<Resultado> {
   const u = await exigirUsuario("configuracoes");
   try {
-    if (!whatsappConfigurado()) throw new ErroFluxo(400, "O servidor ainda não tem UAZAPI_URL e UAZAPI_TOKEN.");
+    const token = await tokenDaEmpresa(u.empresaId);
+    if (!whatsappConfigurado(token)) throw new ErroFluxo(400, "Conecte antes o WhatsApp do sistema.");
     const empresa = (await obterEmpresa(await getDb(), u.empresaId))!;
     const numeros = numerosDeAlerta(empresa.whatsapp_alertas);
     if (!numeros.length) throw new ErroFluxo(400, "Salve antes o número que recebe os avisos.");
     const texto = `✅ Teste do Integra (${empresa.nome}): este número vai receber os avisos de integração vencida para barrar o motorista na portaria.`;
-    for (const n of numeros) await enviarWhatsApp(n, texto);
+    const enviar = criarEnviador(token);
+    for (const n of numeros) await enviar(n, texto);
     return { ok: true };
   } catch (e) {
-    if (e instanceof Error && !(e instanceof ErroFluxo)) return { ok: false, erro: e.message };
-    return falha(e);
+    return falhaWhatsApp(e);
+  }
+}
+
+/** Cria a instância da empresa (se ainda não houver) e devolve o QR Code para ler no celular. */
+export async function conectarWhatsApp(): Promise<Resultado<{ estado: EstadoWhatsApp }>> {
+  const u = await exigirUsuario("configuracoes");
+  try {
+    const db = await getDb();
+    let token = await tokenDaEmpresa(u.empresaId);
+    if (!token) {
+      if (!uazapiPodeCriarInstancia()) {
+        throw new ErroFluxo(400, "O servidor ainda não tem UAZAPI_URL e UAZAPI_ADMIN_TOKEN para criar a instância.");
+      }
+      const empresa = (await obterEmpresa(db, u.empresaId))!;
+      const nome = `integra-${empresa.slug}`;
+      token = await criarInstancia(nome);
+      await db.query("update app.empresas set whatsapp_instancia = $2, whatsapp_token = $3 where id = $1", [u.empresaId, nome, token]);
+    }
+    const estado = await conectarInstancia(token);
+    return { ok: true, estado };
+  } catch (e) {
+    return falhaWhatsApp(e);
+  }
+}
+
+export async function statusWhatsApp(): Promise<Resultado<{ estado: EstadoWhatsApp | null }>> {
+  const u = await exigirUsuario("configuracoes");
+  try {
+    const token = await tokenDaEmpresa(u.empresaId);
+    return { ok: true, estado: token ? await statusInstancia(token) : null };
+  } catch (e) {
+    return falhaWhatsApp(e);
+  }
+}
+
+export async function desconectarWhatsApp(): Promise<Resultado> {
+  const u = await exigirUsuario("configuracoes");
+  try {
+    const token = await tokenDaEmpresa(u.empresaId);
+    if (token) await desconectarInstancia(token);
+    return { ok: true };
+  } catch (e) {
+    return falhaWhatsApp(e);
   }
 }
 

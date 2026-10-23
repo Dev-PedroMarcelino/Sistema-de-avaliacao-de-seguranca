@@ -3,7 +3,16 @@
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { AreaTexto, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
 import { telefone } from "@/lib/formato";
-import { criarUnidade, criarUsuario, salvarAlertas, salvarEmpresa, testarAlerta } from "../acoes";
+import {
+  conectarWhatsApp,
+  criarUnidade,
+  criarUsuario,
+  desconectarWhatsApp,
+  salvarAlertas,
+  salvarEmpresa,
+  statusWhatsApp,
+  testarAlerta,
+} from "../acoes";
 
 type Estado = { ok: true } | { ok: false; erro: string } | null;
 
@@ -89,6 +98,106 @@ export function FormAlertas({ numeros }: { numeros: string | null }) {
         </Botao>
       </div>
     </form>
+  );
+}
+
+type Estado2 = Awaited<ReturnType<typeof statusWhatsApp>>;
+type EstadoWa = Extract<Estado2, { ok: true }>["estado"];
+
+/** Conecta o WhatsApp do sistema lendo um QR Code, como no WhatsApp Web. */
+export function ConexaoWhatsApp({ podeCriar }: { podeCriar: boolean }) {
+  const [estado, setEstado] = useState<EstadoWa>(null);
+  const [erro, setErro] = useState("");
+  const [carregando, setCarregando] = useState(true);
+  const [pendente, iniciar] = useTransition();
+
+  useEffect(() => {
+    let ativo = true;
+    const atualizar = async () => {
+      const r = await statusWhatsApp();
+      if (!ativo) return;
+      setCarregando(false);
+      if (r.ok) setEstado((atual) => (r.estado?.status === "connected" || !atual?.qrcode ? r.estado : { ...atual, ...r.estado, qrcode: atual.qrcode }));
+      else setErro(r.erro);
+    };
+    void atualizar();
+    // Enquanto o QR está na tela, confere a cada 3 s se o celular já leu.
+    const id = setInterval(atualizar, estado?.qrcode ? 3000 : 30000);
+    return () => {
+      ativo = false;
+      clearInterval(id);
+    };
+  }, [estado?.qrcode]);
+
+  const conectar = () =>
+    iniciar(async () => {
+      setErro("");
+      const r = await conectarWhatsApp();
+      if (r.ok) setEstado(r.estado);
+      else setErro(r.erro);
+    });
+  const desconectar = () =>
+    iniciar(async () => {
+      if (!window.confirm("Desconectar o WhatsApp do sistema? Os avisos automáticos param até conectar de novo.")) return;
+      const r = await desconectarWhatsApp();
+      if (r.ok) setEstado((e) => (e ? { ...e, status: "disconnected", qrcode: null } : e));
+      else setErro(r.erro);
+    });
+
+  const conectado = estado?.status === "connected";
+  return (
+    <div className="space-y-3">
+      <div
+        className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 ring-1 ${
+          conectado ? "bg-green-50 ring-green-200" : "bg-stone-50 ring-stone-200"
+        }`}
+      >
+        <p className="text-sm">
+          {carregando ? (
+            "Verificando…"
+          ) : conectado ? (
+            <>
+              <strong className="text-green-800">Conectado</strong>
+              {estado?.numero ? ` · ${telefone(estado.numero)}` : ""}
+              {estado?.nomePerfil ? ` · ${estado.nomePerfil}` : ""}
+            </>
+          ) : estado?.qrcode ? (
+            <strong>Aguardando a leitura do QR Code…</strong>
+          ) : (
+            <strong className="text-stone-700">Não conectado</strong>
+          )}
+        </p>
+        {conectado ? (
+          <Botao variante="contorno" tamanho="sm" disabled={pendente} onClick={desconectar}>
+            Desconectar
+          </Botao>
+        ) : (
+          <Botao tamanho="sm" disabled={pendente || (!podeCriar && !estado)} onClick={conectar}>
+            {pendente ? "Gerando QR…" : estado?.qrcode ? "Gerar novo QR" : "Conectar WhatsApp"}
+          </Botao>
+        )}
+      </div>
+      {!conectado && estado?.qrcode && (
+        <div className="flex flex-wrap items-center gap-5 rounded-xl bg-white p-4 ring-1 ring-stone-200">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={estado.qrcode} alt="QR Code para conectar o WhatsApp" className="h-56 w-56" />
+          <ol className="max-w-xs list-decimal space-y-1 pl-5 text-sm text-stone-700">
+            <li>No celular que vai enviar os avisos, abra o WhatsApp.</li>
+            <li>
+              Toque em <strong>Mais opções</strong> (ou Configurações) → <strong>Dispositivos conectados</strong>.
+            </li>
+            <li>
+              Toque em <strong>Conectar um dispositivo</strong> e aponte a câmera para este código.
+            </li>
+            <li>O QR expira em cerca de 1 minuto; se vencer, gere outro.</li>
+          </ol>
+        </div>
+      )}
+      {!podeCriar && !estado && (
+        <p className="text-xs text-amber-800">Falta configurar UAZAPI_URL e UAZAPI_ADMIN_TOKEN no servidor.</p>
+      )}
+      {erro && <Aviso>{erro}</Aviso>}
+    </div>
   );
 }
 

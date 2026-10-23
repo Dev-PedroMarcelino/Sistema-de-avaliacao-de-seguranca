@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/db";
-import { enviarWhatsApp, whatsappConfigurado } from "@/lib/whatsapp-api";
+import { criarEnviador, uazapiServidorConfigurado } from "@/lib/whatsapp-api";
 import { processarVencimentos } from "./vencimentos";
 
 const A_CADA_MS = 60 * 60_000;
@@ -10,10 +10,10 @@ export function iniciarAgendador() {
   if (global.__integraAgendador || process.env.DEMO_MODE === "true") return;
   global.__integraAgendador = true;
   const rodar = async () => {
-    if (!whatsappConfigurado()) return;
+    if (!uazapiServidorConfigurado()) return;
     try {
       const r = await processarVencimentos(await getDb(), {
-        enviar: enviarWhatsApp,
+        enviador: criarEnviador,
         urlBase: process.env.APP_URL?.replace(/\/$/, "") ?? null,
       });
       if (r.enviados || r.erros) console.log(`[integra] avisos de vencimento: ${r.enviados} enviados, ${r.erros} com erro`);
@@ -23,5 +23,5 @@ export function iniciarAgendador() {
   };
   setTimeout(rodar, 60_000);
   setInterval(rodar, A_CADA_MS);
-  if (!whatsappConfigurado()) console.log("[integra] aviso de vencimento desligado: defina UAZAPI_URL e UAZAPI_TOKEN");
+  if (!uazapiServidorConfigurado()) console.log("[integra] aviso de vencimento desligado: defina UAZAPI_URL");
 }

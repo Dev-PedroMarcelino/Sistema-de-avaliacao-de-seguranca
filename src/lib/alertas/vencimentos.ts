@@ -49,6 +49,7 @@ interface Vencido {
   integracao_id: string;
   empresa: string;
   whatsapp_alertas: string;
+  whatsapp_token: string | null;
   dados: { motorista: { nome: string; cpf: string }; placa: string | null; transportadora: string | null };
 }
 
@@ -59,13 +60,13 @@ interface Vencido {
  */
 export async function processarVencimentos(
   db: Db,
-  opcoes: { agora?: Date; enviar: EnviarWhatsApp; urlBase?: string | null },
+  opcoes: { agora?: Date; enviador: (tokenEmpresa: string | null) => EnviarWhatsApp; urlBase?: string | null },
 ) {
   const agora = opcoes.agora ?? new Date();
   const desde = new Date(agora.getTime() - JANELA_AVISO_DIAS * 86_400_000);
   const vencidos = await db.query<Vencido>(
     `select cs.id, cs.codigo, cs.vigente_ate, cs.empresa_id, cs.integracao_id, cs.dados,
-            e.nome as empresa, e.whatsapp_alertas
+            e.nome as empresa, e.whatsapp_alertas, e.whatsapp_token
        from app.comprovantes_situacao cs
        join app.empresas e on e.id = cs.empresa_id
        left join app.alertas_vencimento a on a.comprovante_id = cs.id
@@ -110,7 +111,8 @@ export async function processarVencimentos(
         : null,
     });
     try {
-      for (const numero of destinos) await opcoes.enviar(numero, texto);
+      const enviar = opcoes.enviador(v.whatsapp_token);
+      for (const numero of destinos) await enviar(numero, texto);
       await db.tx(async (t) => {
         await t.query(
           "update app.alertas_vencimento set status = 'enviado', enviado_em = $2::timestamptz, ultimo_erro = null where comprovante_id = $1",

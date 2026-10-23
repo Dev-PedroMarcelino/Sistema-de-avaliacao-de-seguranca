@@ -38,12 +38,12 @@ describe("aviso de integração vencida", () => {
 
   it("avisa uma vez cada vencido recente e ignora quem já refez", async () => {
     const enviados: string[] = [];
-    const r = await processarVencimentos(db, { agora: AGORA, enviar: async (n, t) => void enviados.push(`${n}|${t}`) });
+    const r = await processarVencimentos(db, { agora: AGORA, enviador: () => async (n, t) => void enviados.push(`${n}|${t}`) });
     // A demo tem vencidos há 35, 27 e 20 dias; o de 35 dias está fora da janela e já refez.
     expect(r).toEqual({ enviados: 2, erros: 0 });
     expect(enviados.every((e) => e.startsWith("5519999991234|"))).toBe(true);
 
-    const deNovo = await processarVencimentos(db, { agora: AGORA, enviar: async () => void enviados.push("x") });
+    const deNovo = await processarVencimentos(db, { agora: AGORA, enviador: () => async () => void enviados.push("x") });
     expect(deNovo).toEqual({ enviados: 0, erros: 0 });
     expect(enviados).toHaveLength(2);
   });
@@ -62,12 +62,12 @@ describe("aviso de integração vencida", () => {
     const depois = new Date(AGORA.getTime() + 20 * 86_400_000); // vencem os da demo que estavam "vencendo"
     const falha = await processarVencimentos(db, {
       agora: depois,
-      enviar: async () => {
+      enviador: () => async () => {
         throw new Error("fora do ar");
       },
     });
     expect(falha.erros).toBeGreaterThan(0);
-    const ok = await processarVencimentos(db, { agora: depois, enviar: async () => {} });
+    const ok = await processarVencimentos(db, { agora: depois, enviador: () => async () => {} });
     expect(ok.enviados).toBe(falha.erros);
   });
 });

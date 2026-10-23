@@ -3,10 +3,10 @@ import { Cabecalho } from "@/components/painel";
 import { exigirUsuario } from "@/lib/auth/servidor";
 import { getDb, um } from "@/lib/db";
 import { listarUnidades, obterEmpresa, ultimosAlertas } from "@/lib/painel/consultas";
-import { whatsappConfigurado } from "@/lib/whatsapp-api";
+import { uazapiPodeCriarInstancia, whatsappConfigurado } from "@/lib/whatsapp-api";
 import * as fmt from "@/lib/formato";
 import { alternarUsuario } from "../acoes";
-import { FormAlertas, FormEmpresa, FormUnidade, FormUsuario } from "./formularios";
+import { ConexaoWhatsApp, FormAlertas, FormEmpresa, FormUnidade, FormUsuario } from "./formularios";
 
 export const metadata: Metadata = { title: "Configurações" };
 
@@ -28,7 +28,10 @@ export default async function Configuracoes() {
     ),
   ]);
   const validade = treinamento?.validade_dias ?? 365;
-  const automatico = whatsappConfigurado();
+  const token = (await um<{ whatsapp_token: string | null }>(db, "select whatsapp_token from app.empresas where id = $1", [u.empresaId]))
+    ?.whatsapp_token;
+  const automatico = whatsappConfigurado(token);
+  const podeCriar = Boolean(token) || uazapiPodeCriarInstancia();
 
   return (
     <>
@@ -53,14 +56,18 @@ export default async function Configuracoes() {
         </section>
 
         <section className="rounded-2xl bg-white p-5 ring-1 ring-stone-200 lg:col-span-2">
-          <h2 className="font-bold">Aviso de integração vencida</h2>
+          <h2 className="font-bold">WhatsApp do sistema</h2>
+          <p className="mb-3 mt-1 text-sm text-stone-600">
+            Número que o Integra usa para enviar os avisos automáticos. Conecte lendo o QR Code, como no WhatsApp Web.
+          </p>
+          <ConexaoWhatsApp podeCriar={podeCriar} />
+
+          <h2 className="mt-6 border-t border-stone-100 pt-5 font-bold">Aviso de integração vencida</h2>
           <p className="mb-4 mt-1 text-sm text-stone-600">
             Quando a integração de um motorista vence ({validade} dias depois de feita), o sistema manda um WhatsApp para estes
             números avisando para barrar a entrada até ele refazer. Cada vencimento é avisado uma vez só.
             {!automatico && (
-              <strong className="mt-1 block text-amber-800">
-                O envio automático ainda não está ligado no servidor (faltam UAZAPI_URL e UAZAPI_TOKEN).
-              </strong>
+              <strong className="mt-1 block text-amber-800">Os avisos só saem depois que o WhatsApp do sistema estiver conectado.</strong>
             )}
           </p>
           <FormAlertas numeros={empresa!.whatsapp_alertas} />
