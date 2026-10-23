@@ -78,6 +78,22 @@ export async function criarPglite(pasta?: string): Promise<Db> {
   return envolver(pg, false);
 }
 
+const ERROS_DE_REDE = new Set(["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT"]);
+
+/** Em container, o nome do banco pode demorar alguns segundos para existir na rede: tenta de novo. */
+async function comNovasTentativas<T>(fn: () => Promise<T>, tentativas = 10, esperaMs = 3000): Promise<T> {
+  for (let n = 1; ; n++) {
+    try {
+      return await fn();
+    } catch (erro) {
+      const codigo = (erro as { code?: string }).code ?? "";
+      if (!ERROS_DE_REDE.has(codigo) || n >= tentativas) throw erro;
+      console.warn(`[integra] banco indisponível (${codigo}); nova tentativa ${n + 1}/${tentativas} em ${esperaMs / 1000} s`);
+      await new Promise((ok) => setTimeout(ok, esperaMs));
+    }
+  }
+}
+
 const global = globalThis as unknown as { __integraDb?: Promise<Db> };
 
 /**
@@ -92,7 +108,7 @@ export function getDb(): Promise<Db> {
       if (url) {
         const db = await conectarPostgres(url);
         const { prepararBanco } = await import("./preparar");
-        await prepararBanco(db);
+        await comNovasTentativas(() => prepararBanco(db));
         return db;
       }
       const db = await criarPglite(process.env.PGLITE_DIR || path.join(process.cwd(), ".data", "pglite"));

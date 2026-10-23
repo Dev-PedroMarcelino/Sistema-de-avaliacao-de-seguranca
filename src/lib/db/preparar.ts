@@ -14,7 +14,10 @@ export async function prepararBanco(db: Db) {
     if (aplicadas.length) console.log(`[integra] migrações aplicadas: ${aplicadas.join(", ")}`);
   }
 
-  const temEmpresa = await um(db, "select 1 from app.empresas limit 1").catch(() => null);
+  const temEmpresa = await um(db, "select 1 from app.empresas limit 1").catch((erro) => {
+    console.error("[integra] tabelas não encontradas (rode as migrações ou use MIGRAR_AO_INICIAR=true):", erro?.message);
+    return null;
+  });
   if (temEmpresa !== undefined) return; // já tem dados, ou o schema ainda não existe
 
   if (process.env.DEMO_MODE === "true") {
@@ -25,6 +28,11 @@ export async function prepararBanco(db: Db) {
   }
 
   const { EMPRESA_NOME, UNIDADE_NOME, ADMIN_NOME, ADMIN_EMAIL, ADMIN_SENHA, CONTEUDO_INICIAL } = process.env;
+  const faltando = variaveisDeCadastroFaltando();
+  if (faltando.length) {
+    console.log(`[integra] banco sem empresa; para cadastrar o cliente defina: ${faltando.join(", ")}`);
+    return;
+  }
   if (!(EMPRESA_NOME && UNIDADE_NOME && ADMIN_NOME && ADMIN_EMAIL && ADMIN_SENHA)) return;
 
   const { criarEmpresa } = await import("../integracao/empresa");
@@ -43,6 +51,12 @@ export async function prepararBanco(db: Db) {
       console.error("[integra] conteúdo inicial inválido; ajuste no painel em Vídeo e perguntas:", erro);
     }
   }
+}
+
+const VARIAVEIS_CADASTRO = ["EMPRESA_NOME", "UNIDADE_NOME", "ADMIN_NOME", "ADMIN_EMAIL", "ADMIN_SENHA"] as const;
+
+export function variaveisDeCadastroFaltando(): string[] {
+  return VARIAVEIS_CADASTRO.filter((k) => !process.env[k]?.trim());
 }
 
 export function lerConteudo(texto: string): ConteudoVersao {
