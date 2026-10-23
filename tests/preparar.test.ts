@@ -2,7 +2,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import { criarPglite, um } from "@/lib/db";
 import { prepararBanco } from "@/lib/db/preparar";
 
-const VARIAVEIS = ["MIGRAR_AO_INICIAR", "DEMO_MODE", "EMPRESA_NOME", "UNIDADE_NOME", "ADMIN_NOME", "ADMIN_EMAIL", "ADMIN_SENHA"];
+const VARIAVEIS = [
+  "MIGRAR_AO_INICIAR",
+  "DEMO_MODE",
+  "EMPRESA_NOME",
+  "UNIDADE_NOME",
+  "ADMIN_NOME",
+  "ADMIN_EMAIL",
+  "ADMIN_SENHA",
+  "CONTEUDO_INICIAL",
+];
 const original = Object.fromEntries(VARIAVEIS.map((k) => [k, process.env[k]]));
 
 afterEach(() => {
@@ -33,6 +42,37 @@ describe("preparo do banco no deploy", () => {
               (select count(*)::int from app.versoes where publicada_em is null) as rascunhos`,
     );
     expect(contagem).toEqual({ empresas: 1, usuarios: 1, rascunhos: 1 });
+  });
+
+  it("publica o conteúdo inicial (base64) junto com o cadastro do cliente", async () => {
+    const conteudo = {
+      video_url: "https://exemplo.test/video.mp4",
+      duracao_seg: 436.5,
+      termo: "Eu, {nome}, CPF {cpf}, declaro que assisti ao vídeo da {empresa} e me comprometo a cumprir as regras.",
+      perguntas: [
+        { id: "q1", texto: "Limite de velocidade?", alternativas: [{ id: "a", texto: "20 km/h" }, { id: "b", texto: "30 km/h" }], correta: "b" },
+      ],
+    };
+    Object.assign(process.env, {
+      MIGRAR_AO_INICIAR: "true",
+      DEMO_MODE: "false",
+      EMPRESA_NOME: "Pedreira Conteúdo",
+      UNIDADE_NOME: "Portaria",
+      ADMIN_NOME: "Admin",
+      ADMIN_EMAIL: "admin@conteudo.local",
+      ADMIN_SENHA: "senha-de-teste-123",
+      CONTEUDO_INICIAL: Buffer.from(JSON.stringify(conteudo)).toString("base64"),
+    });
+    const db = await criarPglite();
+    await prepararBanco(db);
+    const v = await um<{ numero: number; duracao_seg: number; publicada: boolean; hash: boolean; perguntas: unknown[] }>(
+      db,
+      `select numero, duracao_seg, publicada_em is not null as publicada, conteudo_hash is not null as hash, perguntas
+         from app.versoes where publicada_em is not null`,
+    );
+    expect(v).toMatchObject({ numero: 1, duracao_seg: 436.5, publicada: true, hash: true });
+    expect(v?.perguntas).toHaveLength(1);
+    delete process.env.CONTEUDO_INICIAL;
   });
 
   it("sem migração e sem schema, não faz nada", async () => {
