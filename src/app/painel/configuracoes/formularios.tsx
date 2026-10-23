@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { AreaTexto, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
-import { criarUnidade, criarUsuario, salvarEmpresa } from "../acoes";
+import { telefone } from "@/lib/formato";
+import { criarUnidade, criarUsuario, salvarAlertas, salvarEmpresa, testarAlerta } from "../acoes";
 
 type Estado = { ok: true } | { ok: false; erro: string } | null;
 
@@ -52,6 +53,41 @@ export function FormEmpresa({
       <Botao type="submit" disabled={enviando}>
         Salvar
       </Botao>
+    </form>
+  );
+}
+
+export function FormAlertas({ numeros }: { numeros: string | null }) {
+  const [estado, acao, enviando] = useActionState(salvarAlertas, null);
+  const [teste, setTeste] = useState<Estado>(null);
+  const [testando, iniciar] = useTransition();
+  const atuais = (numeros ?? "").split(",").filter(Boolean).map(telefone).join(", ");
+  return (
+    <form action={acao} className="space-y-3">
+      <div>
+        <Rotulo htmlFor="whatsapp_alertas">WhatsApp que recebe o aviso (portaria ou segurança)</Rotulo>
+        <Campo
+          id="whatsapp_alertas"
+          name="whatsapp_alertas"
+          defaultValue={atuais}
+          placeholder="(19) 99999-1234 — separe por vírgula para mais de um"
+        />
+      </div>
+      <Retorno estado={estado} ok="Números salvos." />
+      {teste && (teste.ok ? <Aviso tipo="ok">Mensagem de teste enviada.</Aviso> : <Aviso>{teste.erro}</Aviso>)}
+      <div className="flex flex-wrap gap-2">
+        <Botao type="submit" disabled={enviando}>
+          Salvar
+        </Botao>
+        <Botao
+          type="button"
+          variante="contorno"
+          disabled={testando}
+          onClick={() => iniciar(async () => setTeste(await testarAlerta()))}
+        >
+          {testando ? "Enviando…" : "Enviar mensagem de teste"}
+        </Botao>
+      </div>
     </form>
   );
 }

@@ -18,6 +18,7 @@ export const ROTULOS_EVENTO: Record<string, string> = {
   termo_assinado: "Assinou o termo de ciência",
   comprovante_emitido: "Comprovante emitido",
   conferido_portaria: "Conferido pessoalmente na portaria",
+  vencimento_avisado: "Integração vencida: aviso enviado por WhatsApp",
 };
 
 const seg = (n: unknown) => `${Math.round(Number(n) || 0)} s`;
@@ -51,6 +52,8 @@ export function detalheEvento(tipo: string, d: Record<string, unknown>): string 
       return `código ${d.codigo}`;
     case "conferido_portaria":
       return `por ${d.por}`;
+    case "vencimento_avisado":
+      return `para ${(d.destinos as string[] | undefined)?.join(", ") ?? "—"}`;
     default:
       return "";
   }

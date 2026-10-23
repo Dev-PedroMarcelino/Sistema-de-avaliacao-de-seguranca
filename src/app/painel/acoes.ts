@@ -13,6 +13,8 @@ import { obterEmpresa } from "@/lib/painel/consultas";
 import { ipDe, urlBase, userAgentDe } from "@/lib/requisicao";
 import { normalizarTelefone } from "@/lib/validacao";
 import { linkWhatsApp, preencherMensagem } from "@/lib/whatsapp";
+import { enviarWhatsApp, whatsappConfigurado } from "@/lib/whatsapp-api";
+import { numerosDeAlerta } from "@/lib/alertas/vencimentos";
 
 type Resultado<T = object> = ({ ok: true } & T) | { ok: false; erro: string };
 
@@ -166,6 +168,39 @@ export async function salvarValidade(form: FormData) {
 // ---------------------------------------------------------------------------
 // Configurações (só admin)
 // ---------------------------------------------------------------------------
+
+export async function salvarAlertas(_: unknown, form: FormData): Promise<Resultado | null> {
+  const u = await exigirUsuario("configuracoes");
+  try {
+    const bruto = String(form.get("whatsapp_alertas") ?? "").trim();
+    const numeros = numerosDeAlerta(bruto);
+    if (bruto && numeros.length === 0) throw new ErroFluxo(400, "Número inválido. Use DDD + número, ex.: (19) 99999-1234.");
+    await (await getDb()).query("update app.empresas set whatsapp_alertas = $2 where id = $1", [
+      u.empresaId,
+      numeros.length ? numeros.join(",") : null,
+    ]);
+    revalidatePath("/painel/configuracoes");
+    return { ok: true };
+  } catch (e) {
+    return falha(e);
+  }
+}
+
+export async function testarAlerta(): Promise<Resultado> {
+  const u = await exigirUsuario("configuracoes");
+  try {
+    if (!whatsappConfigurado()) throw new ErroFluxo(400, "O servidor ainda não tem UAZAPI_URL e UAZAPI_TOKEN.");
+    const empresa = (await obterEmpresa(await getDb(), u.empresaId))!;
+    const numeros = numerosDeAlerta(empresa.whatsapp_alertas);
+    if (!numeros.length) throw new ErroFluxo(400, "Salve antes o número que recebe os avisos.");
+    const texto = `✅ Teste do Integra (${empresa.nome}): este número vai receber os avisos de integração vencida para barrar o motorista na portaria.`;
+    for (const n of numeros) await enviarWhatsApp(n, texto);
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof Error && !(e instanceof ErroFluxo)) return { ok: false, erro: e.message };
+    return falha(e);
+  }
+}
 
 export async function salvarEmpresa(_: unknown, form: FormData): Promise<Resultado | null> {
   const u = await exigirUsuario("configuracoes");
