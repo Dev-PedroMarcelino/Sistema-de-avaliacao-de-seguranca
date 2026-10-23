@@ -66,7 +66,15 @@ export function FormEmpresa({
   );
 }
 
-export function FormAlertas({ numeros }: { numeros: string | null }) {
+export function FormAlertas({
+  numeros,
+  antecedencia,
+  avisarMotorista,
+}: {
+  numeros: string | null;
+  antecedencia: number;
+  avisarMotorista: boolean;
+}) {
   const [estado, acao, enviando] = useActionState(salvarAlertas, null);
   const [teste, setTeste] = useState<Estado>(null);
   const [testando, iniciar] = useTransition();
@@ -82,6 +90,17 @@ export function FormAlertas({ numeros }: { numeros: string | null }) {
           placeholder="(19) 99999-1234 — separe por vírgula para mais de um"
         />
       </div>
+      <div className="grid gap-3 sm:grid-cols-[220px_1fr] sm:items-end">
+        <div>
+          <Rotulo htmlFor="aviso_antecedencia_dias">Avisar quantos dias antes</Rotulo>
+          <Campo id="aviso_antecedencia_dias" name="aviso_antecedencia_dias" type="number" min={0} max={90} defaultValue={antecedencia} />
+        </div>
+        <label className="flex items-start gap-2 pb-2.5 text-sm">
+          <input type="checkbox" name="avisar_motorista" defaultChecked={avisarMotorista} className="mt-0.5 h-4 w-4 accent-tinta" />
+          <span>No aviso prévio, mandar também ao motorista um link para refazer a integração antes de vencer</span>
+        </label>
+      </div>
+      <p className="text-xs text-stone-500">0 desliga o aviso prévio. O aviso do dia do vencimento continua sempre ligado.</p>
       <Retorno estado={estado} ok="Números salvos." />
       {teste && (teste.ok ? <Aviso tipo="ok">Mensagem de teste enviada.</Aviso> : <Aviso>{teste.erro}</Aviso>)}
       <div className="flex flex-wrap gap-2">

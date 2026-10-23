@@ -184,10 +184,14 @@ export async function salvarAlertas(_: unknown, form: FormData): Promise<Resulta
     const bruto = String(form.get("whatsapp_alertas") ?? "").trim();
     const numeros = numerosDeAlerta(bruto);
     if (bruto && numeros.length === 0) throw new ErroFluxo(400, "Número inválido. Use DDD + número, ex.: (19) 99999-1234.");
-    await (await getDb()).query("update app.empresas set whatsapp_alertas = $2 where id = $1", [
-      u.empresaId,
-      numeros.length ? numeros.join(",") : null,
-    ]);
+    const antecedencia = Number(form.get("aviso_antecedencia_dias") ?? 15);
+    if (!Number.isInteger(antecedencia) || antecedencia < 0 || antecedencia > 90) {
+      throw new ErroFluxo(400, "Antecedência entre 0 e 90 dias (0 desliga o aviso prévio).");
+    }
+    await (await getDb()).query(
+      "update app.empresas set whatsapp_alertas = $2, aviso_antecedencia_dias = $3, avisar_motorista = $4 where id = $1",
+      [u.empresaId, numeros.length ? numeros.join(",") : null, antecedencia, form.get("avisar_motorista") === "on"],
+    );
     revalidatePath("/painel/configuracoes");
     return { ok: true };
   } catch (e) {

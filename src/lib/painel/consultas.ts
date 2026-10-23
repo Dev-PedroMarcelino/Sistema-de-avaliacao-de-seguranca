@@ -423,16 +423,18 @@ export function obterEmpresa(db: Db, empresaId: string) {
     mensagem_whatsapp: string;
     validade_link_dias: number;
     whatsapp_alertas: string | null;
+    aviso_antecedencia_dias: number;
+    avisar_motorista: boolean;
   }>(
     db,
-    "select id, nome, slug, cor, mensagem_whatsapp, validade_link_dias, whatsapp_alertas from app.empresas where id = $1",
+    "select id, nome, slug, cor, mensagem_whatsapp, validade_link_dias, whatsapp_alertas, aviso_antecedencia_dias, avisar_motorista from app.empresas where id = $1",
     [empresaId],
   );
 }
 
 export function ultimosAlertas(db: Db, empresaId: string) {
-  return db.query<{ nome: string; placa: string | null; status: string; criado_em: Date; enviado_em: Date | null; ultimo_erro: string | null }>(
-    `select c.dados->'motorista'->>'nome' as nome, c.dados->>'placa' as placa, a.status, a.criado_em, a.enviado_em, a.ultimo_erro
+  return db.query<{ nome: string; placa: string | null; tipo: string; status: string; criado_em: Date; enviado_em: Date | null; ultimo_erro: string | null }>(
+    `select c.dados->'motorista'->>'nome' as nome, c.dados->>'placa' as placa, a.tipo, a.status, a.criado_em, a.enviado_em, a.ultimo_erro
        from app.alertas_vencimento a join app.comprovantes c on c.id = a.comprovante_id
       where a.empresa_id = $1 order by a.criado_em desc limit 10`,
     [empresaId],

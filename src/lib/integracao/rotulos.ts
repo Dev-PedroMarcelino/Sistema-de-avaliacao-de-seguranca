@@ -19,6 +19,7 @@ export const ROTULOS_EVENTO: Record<string, string> = {
   comprovante_emitido: "Comprovante emitido",
   conferido_portaria: "Conferido pessoalmente na portaria",
   vencimento_avisado: "Integração vencida: aviso enviado por WhatsApp",
+  vencimento_proximo_avisado: "Vencimento próximo: aviso enviado por WhatsApp",
 };
 
 const seg = (n: unknown) => `${Math.round(Number(n) || 0)} s`;
@@ -54,6 +55,8 @@ export function detalheEvento(tipo: string, d: Record<string, unknown>): string 
       return `por ${d.por}`;
     case "vencimento_avisado":
       return `para ${(d.destinos as string[] | undefined)?.join(", ") ?? "—"}`;
+    case "vencimento_proximo_avisado":
+      return `para ${(d.destinos as string[] | undefined)?.join(", ") ?? "—"}${d.motorista_avisado ? " e link novo ao motorista" : ""}`;
     default:
       return "";
   }

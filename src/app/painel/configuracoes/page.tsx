@@ -64,13 +64,18 @@ export default async function Configuracoes() {
 
           <h2 className="mt-6 border-t border-stone-100 pt-5 font-bold">Aviso de integração vencida</h2>
           <p className="mb-4 mt-1 text-sm text-stone-600">
-            Quando a integração de um motorista vence ({validade} dias depois de feita), o sistema manda um WhatsApp para estes
-            números avisando para barrar a entrada até ele refazer. Cada vencimento é avisado uma vez só.
+            A integração vale {validade} dias. Alguns dias antes de vencer, o sistema avisa estes números (e, se quiser, o
+            motorista, com um link para refazer). No dia em que vence, avisa de novo para barrar a entrada até ele refazer.
+            Cada aviso sai uma vez só.
             {!automatico && (
               <strong className="mt-1 block text-amber-800">Os avisos só saem depois que o WhatsApp do sistema estiver conectado.</strong>
             )}
           </p>
-          <FormAlertas numeros={empresa!.whatsapp_alertas} />
+          <FormAlertas
+            numeros={empresa!.whatsapp_alertas}
+            antecedencia={empresa!.aviso_antecedencia_dias}
+            avisarMotorista={empresa!.avisar_motorista}
+          />
           {alertas.length > 0 && (
             <ul className="mt-4 divide-y divide-stone-100 border-t border-stone-100 text-sm">
               {alertas.map((a, i) => (
@@ -79,6 +84,7 @@ export default async function Configuracoes() {
                     <span className="font-semibold">{a.nome}</span> · {fmt.placa(a.placa)}
                   </span>
                   <span className={a.status === "enviado" ? "text-green-700" : "text-red-700"} title={a.ultimo_erro ?? ""}>
+                    {a.tipo === "antecedencia" ? "aviso prévio · " : "vencida · "}
                     {a.status === "enviado" ? `avisado ${fmt.dataHora(a.enviado_em)}` : `falhou: ${a.ultimo_erro?.slice(0, 60) ?? a.status}`}
                   </span>
                 </li>
